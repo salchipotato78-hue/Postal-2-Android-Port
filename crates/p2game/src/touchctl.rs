@@ -245,12 +245,14 @@ pub(crate) fn overlay_system(
     let l = &ctl.layout;
     if !overlay.spawned {
         overlay.spawned = true;
+        eprintln!("touch overlay: {} piezas", 1 + l.buttons.len());
         let mut specs: Vec<(Option<Action>, &'static str)> = vec![(None, "")];
         specs.extend(l.buttons.iter().map(|b| (Some(b.action), label(b.action))));
         for (target, text) in specs {
             commands
                 .spawn((
                     OverlayPart(target),
+                    GlobalZIndex(1000),
                     Node {
                         position_type: PositionType::Absolute,
                         justify_content: JustifyContent::Center,
