@@ -1,0 +1,16 @@
+[package]
+name = "p2android"
+description = "Android entry point for the POSTAL 2 host: builds libpostal2.so (NativeActivity) and reuses the desktop window modules by path"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[lib]
+name = "postal2"
+crate-type = ["cdylib"]
+
+[dependencies]
+p2game = { path = "../p2game" }
+upkg = { path = "../upkg" }
+# Same Bevy as p2game; the android feature selects the NativeActivity backend.
+bevy = { version = "0.19", features = ["android-native-activity"] }

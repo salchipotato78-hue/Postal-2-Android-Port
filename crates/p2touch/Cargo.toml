@@ -1,0 +1,8 @@
+[package]
+name = "p2touch"
+description = "Android touch controls for Postal 2: editable button layout, hit testing, virtual stick and ultrawide projection aspect (no dependencies)"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
