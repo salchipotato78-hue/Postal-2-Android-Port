@@ -273,7 +273,7 @@ impl PhysHost {
             // and a grenade next to a car never damaged it (the original blows such cars up,
             // FIDELITY #26). Also accept a clear line to the top of the victim's cylinder.
             if stop_at_wall && !self.world.borrow_mut().fast_trace(loc, center) && !(h > 0.0 && self.world.borrow_mut().fast_trace(loc + Vec3::Z * h, center)) {
-                if std::env::var_os("P2_HURT_TRACE").is_some() {
+                if crate::envflags::set("P2_HURT_TRACE") {
                     eprintln!("HURT  blocked: {} center {center:.0} victim {loc:.0} h {h:.0}", vm.object_name(v));
                 }
                 continue;
@@ -295,7 +295,7 @@ impl PhysHost {
                 let cn = vm.classes[vm.objects[v].class].name.to_ascii_lowercase();
                 class_hit |= class_check.contains(&cn);
             }
-            if std::env::var_os("P2_HURT_TRACE").is_some() {
+            if crate::envflags::set("P2_HURT_TRACE") {
                 eprintln!("HURT {} -> {} dist {dist:.0} amount {amount:.1} mom {mom:.0}", vm.object_name(me), vm.object_name(v));
             }
             vm.fire_event(v, "TakeDamage", vec![Value::Int(amount as i32), Value::Object(inst), Value::Vector(hit_loc.to_array()), Value::Vector(mom.to_array()), dtype.clone()]);
@@ -334,7 +334,7 @@ impl PhysHost {
         let body = w.get_mut(id)?;
         match name {
             "kaddimpulse" => {
-                if std::env::var_os("P2_KARMA_TRACE").is_some() {
+                if crate::envflags::set("P2_KARMA_TRACE") {
                     let kmass = vm.get_prop(me, "KParams").and_then(|v| v.as_obj()).and_then(|p| vm.get_prop(p, "KMass")).map(|v| v.as_float());
                     eprintln!("KIMPULSE {} imp={:.0} mass={mass} kmass={kmass:?} v_before={:.0}", vm.object_name(me), vec(0), body.velocity);
                 }
@@ -448,7 +448,7 @@ impl PhysHost {
             };
             let st = map.get_mut(&controller).expect("steer state");
             if let Some(h) = detour {
-                if std::env::var_os("P2GAME_NAV_TRACE").is_some() {
+                if crate::envflags::set("P2GAME_NAV_TRACE") {
                     eprintln!("NAV detour {} at {:.0},{:.0} via {:.0},{:.0} to {:.0},{:.0}", vm.object_name(pawn), here.x, here.y, h.x, h.y, dest.x, dest.y);
                 }
                 NAV_DETOUR.with(|c| c.set(c.get() + 1));
@@ -461,7 +461,7 @@ impl PhysHost {
                 st.dir = Vec3::new(h.x - here.x, h.y - here.y, 0.0).normalize_or_zero();
                 return Some(st.dir);
             }
-            if std::env::var_os("P2GAME_NAV_TRACE").is_some() {
+            if crate::envflags::set("P2GAME_NAV_TRACE") {
                 eprintln!("NAV stuck {} at {:.0},{:.0},{:.0} dest {:.0},{:.0},{:.0} dist {dist:.0}", vm.object_name(pawn), here.x, here.y, here.z, dest.x, dest.y, dest.z);
             }
             NAV_STUCK.with(|c| c.set(c.get() + 1));
@@ -686,13 +686,13 @@ impl PhysHost {
         }
         self.timings.set(t);
         // `P2GAME_SPIKES`: physics phase split (register, pull, tick, flush) every 300 frames.
-        if self.frames.get() % 300 == 0 && std::env::var_os("P2GAME_SPIKES").is_some() {
+        if self.frames.get() % 300 == 0 && crate::envflags::set("P2GAME_SPIKES") {
             let f = 300.0 / 1000.0;
             println!("physics split ms/frame: register {:.2} pull {:.2} tick {:.2} flush {:.2}", t[0] / f, t[1] / f, t[2] / f, t[3] / f);
             self.timings.set([0.0; 4]);
         }
         // `P2GAME_DIRTY_VERIFY`: running totals of the unchanged-actor pull skips and their checks.
-        if self.frames.get() % 300 == 0 && std::env::var_os("P2GAME_DIRTY_VERIFY").is_some() {
+        if self.frames.get() % 300 == 0 && crate::envflags::set("P2GAME_DIRTY_VERIFY") {
             let (skipped, checked, bad) = self.bridge.borrow().dirty_stats();
             println!("DIRTY_VERIFY frame {} skipped {skipped} checked {checked} mismatches {bad}", self.frames.get());
         }
@@ -735,7 +735,7 @@ fn attach_trace_mesh(lib: &upkg::library::Library, cache: &mut std::collections:
         .entry(path.clone())
         .or_insert_with(|| crate::host::resolve_path(lib, &path, Some("StaticMesh")).map(|o| p2collide::world::mesh_collision_tris(&o).0).filter(|t| !t.is_empty()).map(std::sync::Arc::new))
         .clone()?;
-    if std::env::var_os("P2GAME_TRACE_LOG").is_some() {
+    if crate::envflags::set("P2GAME_TRACE_LOG") {
         println!("{} mesh {} {path} ({} tris)", if as_collider { "collision" } else { "trace" }, vm.object_name(a), tris.len());
     }
     let s = vm.get_prop(a, "DrawScale").map(|v| v.as_float()).unwrap_or(1.0);
@@ -772,7 +772,7 @@ thread_local! {
 /// instantiation and the begin-play scripts; [`install`] picks it up. A build already under way
 /// for the same map (a [`preload`] near a telepad) is kept.
 pub fn prefetch(lib: std::sync::Arc<upkg::library::Library>, map: std::sync::Arc<upkg::Package>) {
-    if std::env::var_os("P2GAME_NO_PHYSICS").is_some() || std::env::var_os("P2GAME_NO_PREFETCH").is_some() {
+    if crate::envflags::set("P2GAME_NO_PHYSICS") || crate::envflags::set("P2GAME_NO_PREFETCH") {
         return;
     }
     if PREFETCH.with(|p| p.borrow().as_ref().is_some_and(|(n, _)| n.eq_ignore_ascii_case(&map.name))) {
@@ -794,7 +794,7 @@ pub fn preloading() -> Option<String> {
 /// current level keeps playing (the player is near a level exit). A later travel to that map
 /// takes the result instead of building it (the collision world depends only on the package).
 pub fn preload(lib: std::sync::Arc<upkg::library::Library>, name: &str, path: std::path::PathBuf) {
-    if std::env::var_os("P2GAME_NO_PHYSICS").is_some() || std::env::var_os("P2GAME_NO_PREFETCH").is_some() {
+    if crate::envflags::set("P2GAME_NO_PHYSICS") || crate::envflags::set("P2GAME_NO_PREFETCH") {
         return;
     }
     if preloading().is_some_and(|n| n.eq_ignore_ascii_case(name)) {
@@ -879,7 +879,7 @@ pub fn install(host: &GameHost, vm: &mut Vm) -> Option<Rc<PhysHost>> {
     for a in vm.actors.clone() {
         if bridge.phys(a).is_none() {
             if PhysHost::wants_physics(vm, a) {
-                if std::env::var_os("P2GAME_STATIC_TOUCH").is_some() && pb(vm, a, "bStatic") {
+                if crate::envflags::set("P2GAME_STATIC_TOUCH") && pb(vm, a, "bStatic") {
                     println!("static touch actor {} ({})", vm.object_name(a), vm.classes[vm.objects[a].class].name);
                 }
                 let id = bridge.add_actor(vm, &mut m.world, a);
@@ -980,7 +980,7 @@ impl Host for PhysHost {
             cur = vm.get_prop(c, "Owner").and_then(|o| o.as_obj()).filter(|o| !vm.objects[*o].deleted);
         }
         let h = self.world.borrow_mut().trace(v(req.start), v(req.end), v(req.extent), req.trace_actors, src);
-        if std::env::var_os("P2GAME_TRACE_LOG").is_some() {
+        if crate::envflags::set("P2GAME_TRACE_LOG") {
             let who = from.map(|f| vm.object_name(f)).unwrap_or_default();
             let what = h.as_ref().map(|h| (self.bridge.borrow().hit_object(vm, h.actor).map(|o| vm.object_name(o)), h.location, self.world.borrow().level.material_path(h.material).map(|s| s.to_string())));
             println!("TRACE {who} {:?} -> {:?} actors={} hit {:?}", req.start, req.end, req.trace_actors, what);
@@ -1055,7 +1055,7 @@ impl Host for PhysHost {
 /// Level hook: installs physics for every level the game boots or travels to.
 pub fn level_hook(host: &GameHost, vm: &mut Vm) {
     CURRENT.with(|c| *c.borrow_mut() = None);
-    if std::env::var_os("P2GAME_NO_PHYSICS").is_some() {
+    if crate::envflags::set("P2GAME_NO_PHYSICS") {
         return;
     }
     install(host, vm);
