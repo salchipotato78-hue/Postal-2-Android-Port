@@ -44,6 +44,8 @@ struct Finger {
 pub(crate) struct TouchCtl {
     pub(crate) layout: Layout,
     fingers: HashMap<u64, Finger>,
+    /// Stick deflection this frame (-1..1 each axis), for the knob. None when not touched.
+    pub(crate) knob: Option<(f32, f32)>,
 }
 
 impl TouchCtl {
@@ -55,16 +57,17 @@ impl TouchCtl {
         {
             const PATH: &str = "/data/data/com.postal2.app/files/touch_layout.txt";
             match std::fs::read_to_string(PATH) {
-                Ok(text) => match Layout::from_text(&text) {
+                // Archivo de otra versión (diseño viejo): se reemplaza por el actual.
+                Ok(text) if text.starts_with(p2touch::LAYOUT_HEADER) => match Layout::from_text(&text) {
                     Ok(l) => layout = l,
                     Err(e) => eprintln!("touch_layout.txt: {e}; uso el diseño por defecto"),
                 },
-                Err(_) => {
+                _ => {
                     let _ = std::fs::write(PATH, layout.to_text());
                 }
             }
         }
-        TouchCtl { layout, fingers: HashMap::new() }
+        TouchCtl { layout, fingers: HashMap::new(), knob: None }
     }
 }
 
@@ -102,6 +105,7 @@ pub(crate) fn frame(
     let min_side = w.min(h).max(1.0);
     let layout = ctl.layout.clone();
     let mut out = TouchFrame { events: Vec::new(), mouse: None };
+    ctl.knob = None;
 
     // New fingers: which zone they start in.
     for t in touches.iter_just_pressed() {
@@ -164,6 +168,9 @@ pub(crate) fn frame(
                 if ax > STICK_DEADZONE {
                     want.push(STICK_COMMANDS[3]);
                 }
+                if !menu {
+                    ctl.knob = Some((ax, ay));
+                }
                 f.held.retain(|(cmd, k)| {
                     if want.contains(cmd) {
                         true
@@ -207,14 +214,21 @@ pub(crate) fn frame(
 
 // --- On-screen controls (Android only) -------------------------------------------------------
 
-/// Marks one overlay node: `None` is the stick, `Some` a button.
-#[derive(Component)]
-pub(crate) struct OverlayPart(Option<Action>);
+/// What one overlay node draws: the stick ring, its knob (follows the thumb) or a button.
+#[derive(Component, Clone, Copy)]
+pub(crate) enum OverlayPart {
+    Stick,
+    Knob,
+    Button(Action),
+}
 
 #[derive(Resource, Default)]
 pub(crate) struct TouchOverlay {
     spawned: bool,
 }
+
+/// Knob diameter as a fraction of the stick ring.
+const KNOB_RATIO: f32 = 0.45;
 
 fn label(a: Action) -> &'static str {
     match a {
@@ -232,7 +246,44 @@ fn label(a: Action) -> &'static str {
     }
 }
 
-/// Draws the stick and the buttons where the layout says, with its size and opacity.
+fn spawn_part(commands: &mut Commands, part: OverlayPart, text: &'static str) {
+    commands
+        .spawn((
+            part,
+            GlobalZIndex(1000),
+            Node {
+                position_type: PositionType::Absolute,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                border_radius: BorderRadius::MAX,
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            Visibility::Hidden,
+        ))
+        .with_children(|p| {
+            if !text.is_empty() {
+                p.spawn((Text::new(text), TextColor(Color::WHITE)));
+            }
+        });
+}
+
+/// Places a circle centred at (x, y) of the screen, `size` of the height across, nudged by
+/// (dx, dy) in VMin units (so the knob moves in the same units as the ring).
+fn place(node: &mut Node, x: f32, y: f32, size: f32, dx: f32, dy: f32) {
+    // Percent is of the screen; the ring's size is of the height (min side in landscape).
+    node.left = Val::Percent(x * 100.0);
+    node.top = Val::Percent(y * 100.0);
+    node.width = Val::VMin(size * 100.0);
+    node.height = Val::VMin(size * 100.0);
+    node.margin = UiRect {
+        left: Val::VMin(-size * 50.0 + dx),
+        top: Val::VMin(-size * 50.0 + dy),
+        ..default()
+    };
+}
+
+/// Draws the stick ring with its knob, and the buttons, where the layout says.
 pub(crate) fn overlay_system(
     mut commands: Commands,
     mut overlay: ResMut<TouchOverlay>,
@@ -245,44 +296,37 @@ pub(crate) fn overlay_system(
     let l = &ctl.layout;
     if !overlay.spawned {
         overlay.spawned = true;
-        eprintln!("touch overlay: {} piezas", 1 + l.buttons.len());
-        let mut specs: Vec<(Option<Action>, &'static str)> = vec![(None, "")];
-        specs.extend(l.buttons.iter().map(|b| (Some(b.action), label(b.action))));
-        for (target, text) in specs {
-            commands
-                .spawn((
-                    OverlayPart(target),
-                    GlobalZIndex(1000),
-                    Node {
-                        position_type: PositionType::Absolute,
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(Color::NONE),
-                    Visibility::Hidden,
-                ))
-                .with_children(|p| {
-                    if !text.is_empty() {
-                        p.spawn((Text::new(text), TextColor(Color::WHITE)));
-                    }
-                });
+        eprintln!("touch overlay: {} piezas", 2 + l.buttons.len());
+        spawn_part(&mut commands, OverlayPart::Stick, "");
+        spawn_part(&mut commands, OverlayPart::Knob, "");
+        for b in &l.buttons {
+            spawn_part(&mut commands, OverlayPart::Button(b.action), label(b.action));
         }
     }
+    let s = &l.stick;
+    // Knob offset: the thumb's deflection, scaled to the ring radius (stick.size * 50 VMin).
+    let (ax, ay) = ctl.knob.unwrap_or((0.0, 0.0));
     for (part, mut node, mut bg, mut vis) in &mut parts {
-        let (x, y, size, opacity, visible, color) = match part.0 {
-            None => (l.stick.x, l.stick.y, l.stick.size, l.stick.opacity, l.stick.visible, Color::srgb(0.7, 0.7, 0.7)),
-            Some(a) => match l.button(a) {
-                Some(b) => (b.x, b.y, b.size, b.opacity, b.visible, Color::srgb(0.9, 0.5, 0.2)),
-                None => continue,
+        match *part {
+            OverlayPart::Stick => {
+                place(&mut node, s.x, s.y, s.size, 0.0, 0.0);
+                bg.0 = Color::srgb(0.8, 0.8, 0.8).with_alpha(s.opacity * 0.5);
+                *vis = if s.visible { Visibility::Visible } else { Visibility::Hidden };
+            }
+            OverlayPart::Knob => {
+                let k = s.size * KNOB_RATIO;
+                place(&mut node, s.x, s.y, k, ax * s.size * 50.0, ay * s.size * 50.0);
+                bg.0 = Color::srgb(0.9, 0.9, 0.9).with_alpha(s.opacity);
+                *vis = if s.visible { Visibility::Visible } else { Visibility::Hidden };
+            }
+            OverlayPart::Button(a) => match l.button(a) {
+                Some(b) => {
+                    place(&mut node, b.x, b.y, b.size, 0.0, 0.0);
+                    bg.0 = Color::srgb(0.9, 0.5, 0.2).with_alpha(b.opacity);
+                    *vis = if b.visible { Visibility::Visible } else { Visibility::Hidden };
+                }
+                None => {}
             },
-        };
-        node.left = Val::Percent(x * 100.0);
-        node.top = Val::Percent(y * 100.0);
-        node.width = Val::VMin(size * 100.0);
-        node.height = Val::VMin(size * 100.0);
-        node.margin = UiRect { left: Val::VMin(-size * 50.0), top: Val::VMin(-size * 50.0), ..default() };
-        bg.0 = color.with_alpha(opacity);
-        *vis = if visible { Visibility::Visible } else { Visibility::Hidden };
+        }
     }
 }
