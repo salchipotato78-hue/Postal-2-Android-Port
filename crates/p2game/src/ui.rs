@@ -92,8 +92,8 @@ pub(crate) fn ui_frame(
     // Scripted test runs (P2GAME_EXEC/HOLD) ignore the OS keyboard and mouse: whatever window
     // has focus on the desktop would otherwise move, fire or even suicide the player. (P2GAME_REAL
     // and P2GAME_PILOT inject their input as OS input and drop the real OS input themselves.)
-    let synthetic = std::env::var_os("P2GAME_REAL").is_some() || std::env::var_os("P2GAME_PILOT").is_some();
-    if !synthetic && (std::env::var_os("P2GAME_EXEC").is_some() || std::env::var_os("P2GAME_HOLD").is_some()) {
+    let synthetic = crate::envflags::set("P2GAME_REAL") || crate::envflags::set("P2GAME_PILOT");
+    if !synthetic && (crate::envflags::set("P2GAME_EXEC") || crate::envflags::set("P2GAME_HOLD")) {
         events.clear();
         typed.clear();
         mouse_pos = None;
@@ -125,12 +125,12 @@ pub(crate) fn ui_frame(
     draw_scene_titles(w, h);
     hud.0.items = natives::with_context(|ctx| std::mem::take(&mut ctx.canvas.items));
     // `P2GAME_ITEMS=frame`: lists the canvas items drawn on that frame.
-    if std::env::var("P2GAME_ITEMS").ok().and_then(|s| s.parse::<u32>().ok()) == Some(ui.front.frames) {
+    if crate::envflags::get("P2GAME_ITEMS").and_then(|s| s.parse::<u32>().ok()) == Some(ui.front.frames) {
         for (i, it) in hud.0.items.iter().enumerate() {
             println!("ITEM {i} {}.{} xywh {:.0},{:.0},{:.0},{:.0} uv {:.2},{:.2}-{:.2},{:.2} color {:?} style {}", it.material.pkg.name, it.material.pkg.name(it.material.pkg.exports[it.material.export].name), it.x, it.y, it.w, it.h, it.u0, it.v0, it.u1, it.v1, it.color.0, it.style);
         }
     }
-    if std::env::var_os("P2GAME_UI_TRACE").is_some() && (ui.front.frames < 6 || ui.front.frames % 30 == 0) {
+    if crate::envflags::set("P2GAME_UI_TRACE") && (ui.front.frames < 6 || ui.front.frames % 30 == 0) {
         let vm = &sim.game.world.vm;
         let root = ui.front.root();
         let rs = root.map(|r| {
@@ -183,7 +183,7 @@ pub(crate) fn ui_frame(
             }
         }
     }
-    if ui.front.frames == 2 && std::env::var_os("P2GAME_UI_TRACE").is_some() {
+    if ui.front.frames == 2 && crate::envflags::set("P2GAME_UI_TRACE") {
         println!("ui: {} canvas items, menu {}, pc {:?}", hud.0.items.len(), out.menu_up, sim.game.player_controller.map(|p| sim.game.world.vm.object_name(p)));
     }
 }
@@ -220,7 +220,7 @@ pub(crate) fn follow_player(mut sim: NonSendMut<Sim>, ui: Res<UiInput>, mut cams
     let r = vm.get_prop(pc, "Rotation").map(|v| v.as_rot()).unwrap_or_default();
     let Ok(mut tf) = cams.single_mut() else { return };
     let (r, e3) = crate::frontend::apply_view_shake(vm, pc, r, eye_position(vm, pawn, l, eye));
-    if std::env::var_os("P2GAME_VIEW_TRACE").is_some() {
+    if crate::envflags::set("P2GAME_VIEW_TRACE") {
         println!("VIEW eye {:.1} {:.1} {:.1} eyeheight {eye:.1} walkbob {:?} crouch {:?}/{:?}", e3[0], e3[1], e3[2], vm.get_prop(pawn, "WalkBob").map(|v| v.as_vec()), vm.get_prop(pawn, "bWantsToCrouch").map(|v| v.as_bool()), vm.get_prop(pawn, "bIsCrouched").map(|v| v.as_bool()));
     }
     tf.translation = p2view::scene::to_bevy(e3);
