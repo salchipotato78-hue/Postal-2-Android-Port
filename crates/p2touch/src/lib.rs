@@ -116,24 +116,32 @@ fn clamp01(v: f32) -> f32 {
 }
 
 impl Default for Layout {
-    /// Diseño inicial: solo los botones necesarios. Se puede mover, escalar y ocultar desde el editor.
+    /// Diseño inicial. El HUD del juego ocupa la columna derecha (arriba-centro), así que los
+    /// botones van abajo a la derecha y el pausado arriba a la izquierda. Tamaños en fracción de la altura.
     fn default() -> Self {
-        let b = |action, x, y, size| Button { action, x, y, size, opacity: 0.7, visible: true };
+        let b = |action, x, y, size| Button { action, x, y, size, opacity: 0.6, visible: true };
         Layout {
-            stick: Stick { x: 0.16, y: 0.72, size: 0.30, opacity: 0.5, visible: true },
+            stick: Stick { x: 0.14, y: 0.70, size: 0.36, opacity: 0.35, visible: true },
             look_sensitivity: 1.0,
             buttons: vec![
-                b(Action::Fire, 0.88, 0.74, 0.16),
-                b(Action::AltFire, 0.70, 0.88, 0.11),
-                b(Action::Jump, 0.92, 0.50, 0.11),
-                b(Action::Crouch, 0.78, 0.60, 0.09),
-                b(Action::Reload, 0.60, 0.70, 0.09),
-                b(Action::Use, 0.92, 0.32, 0.09),
-                b(Action::Pause, 0.95, 0.06, 0.08),
+                b(Action::Fire, 0.87, 0.78, 0.15),
+                b(Action::AltFire, 0.72, 0.86, 0.095),
+                b(Action::Jump, 0.93, 0.64, 0.10),
+                b(Action::Crouch, 0.80, 0.62, 0.085),
+                b(Action::Reload, 0.60, 0.70, 0.085),
+                b(Action::Kick, 0.46, 0.66, 0.085),
+                b(Action::Use, 0.52, 0.86, 0.085),
+                b(Action::Pause, 0.05, 0.10, 0.07),
+                b(Action::Holster, 0.13, 0.10, 0.065),
+                b(Action::PrevWeapon, 0.22, 0.10, 0.065),
+                b(Action::NextWeapon, 0.31, 0.10, 0.065),
             ],
         }
     }
 }
+
+/// Cabecera del formato. La versión sirve para reescribir diseños viejos (ver `TouchCtl::load`).
+pub const LAYOUT_HEADER: &str = "# Postal 2 touch layout v2";
 
 impl Layout {
     pub fn button(&self, action: Action) -> Option<&Button> {
@@ -222,7 +230,7 @@ impl Layout {
 
     /// Serializa el diseño en el formato de texto documentado arriba.
     pub fn to_text(&self) -> String {
-        let mut out = String::from("# Postal 2 touch layout\n");
+        let mut out = format!("{LAYOUT_HEADER}\n");
         let s = &self.stick;
         let _ = writeln!(out, "stick {:.3} {:.3} {:.3} {:.3} {}", s.x, s.y, s.size, s.opacity, s.visible as u8);
         let _ = writeln!(out, "look {:.3}", self.look_sensitivity);
