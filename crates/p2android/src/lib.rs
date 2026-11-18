@@ -41,6 +41,8 @@ mod dynmesh;
 mod smoke;
 #[path = "../../p2game/src/ui.rs"]
 mod ui;
+#[path = "../../p2game/src/touchctl.rs"]
+mod touchctl;
 #[path = "../../p2game/src/settings.rs"]
 mod settings;
 #[path = "../../p2game/src/splash.rs"]
