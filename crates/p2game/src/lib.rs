@@ -13,6 +13,7 @@ pub mod cinema;
 pub mod clock;
 pub mod config;
 pub mod demo;
+pub mod envflags;
 #[cfg(feature = "window")]
 pub mod fx_glue;
 pub mod gibs;
