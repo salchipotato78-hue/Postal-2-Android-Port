@@ -9,8 +9,26 @@ version.workspace = true
 name = "postal2"
 crate-type = ["cdylib"]
 
+# The window modules included by path use these crates directly, so they must be dependencies here too.
+# Same set as p2game's `window` feature.
 [dependencies]
+upkg.workspace = true
 p2game = { path = "../p2game" }
-upkg = { path = "../upkg" }
+uscript = { path = "../uscript" }
+p2nav = { path = "../p2nav" }
+p2anim = { path = "../p2anim" }
+glam = "0.32"
+p2sound = { path = "../p2sound", features = ["device"] }
+p2movie = { path = "../p2movie", default-features = false }
+p2matinee = { path = "../p2matinee" }
+p2save = { path = "../p2save" }
+p2physics = { path = "../p2physics" }
+p2collide = { path = "../p2collide" }
+p2view = { path = "../p2view" }
+p2canvas = { path = "../p2canvas" }
+p2input = { path = "../p2input", features = ["bevy"] }
+p2fx = { path = "../p2fx" }
+# Same winit as bevy_winit: window resize requests from the video settings (settings.rs).
+winit = { version = "0.30", default-features = false }
 # Same Bevy as p2game; the android feature selects the NativeActivity backend.
 bevy = { version = "0.19", features = ["android-native-activity"] }
