@@ -56,6 +56,7 @@ mod smoke;
 mod ui;
 mod touchctl;
 mod perflog;
+use p2game::envflags;
 #[cfg(feature = "window")]
 mod settings;
 #[cfg(feature = "window")]
