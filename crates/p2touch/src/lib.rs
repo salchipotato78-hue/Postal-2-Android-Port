@@ -61,6 +61,23 @@ impl Action {
         }
     }
 
+    /// Nombre del comando del juego. Los bindings del jugador deciden qué tecla lo dispara.
+    pub fn command(self) -> &'static str {
+        match self {
+            Action::Fire => "Fire",
+            Action::AltFire => "AltFire",
+            Action::Reload => "Reload",
+            Action::Jump => "Jump",
+            Action::Crouch => "Duck",
+            Action::Use => "Use",
+            Action::Pause => "Pause",
+            Action::Holster => "Holster",
+            Action::Kick => "Kick",
+            Action::NextWeapon => "NextWeapon",
+            Action::PrevWeapon => "PrevWeapon",
+        }
+    }
+
     pub fn parse(s: &str) -> Option<Action> {
         Action::ALL.iter().copied().find(|a| a.name() == s)
     }
