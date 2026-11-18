@@ -255,7 +255,6 @@ pub(crate) fn overlay_system(
                         align_items: AlignItems::Center,
                         ..default()
                     },
-                    BorderRadius::MAX,
                     BackgroundColor(Color::NONE),
                     Visibility::Hidden,
                 ))
@@ -276,9 +275,9 @@ pub(crate) fn overlay_system(
         };
         node.left = Val::Percent(x * 100.0);
         node.top = Val::Percent(y * 100.0);
-        node.width = Val::Vmin(size * 100.0);
-        node.height = Val::Vmin(size * 100.0);
-        node.margin = UiRect { left: Val::Vmin(-size * 50.0), top: Val::Vmin(-size * 50.0), ..default() };
+        node.width = Val::VMin(size * 100.0);
+        node.height = Val::VMin(size * 100.0);
+        node.margin = UiRect { left: Val::VMin(-size * 50.0), top: Val::VMin(-size * 50.0), ..default() };
         bg.0 = color.with_alpha(opacity);
         *vis = if visible { Visibility::Visible } else { Visibility::Hidden };
     }
