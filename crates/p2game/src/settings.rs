@@ -135,7 +135,7 @@ pub(crate) fn initial_window(vm: &mut Vm, title: String) -> Window {
     if let Some((w, h)) = std::env::var("P2GAME_RES").ok().and_then(|s| s.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))) {
         (v.width, v.height) = (w, h);
     }
-    v.vsync = user_value(vm, OURS, "VSync").map(|s| truthy(&s)).unwrap_or(true) && std::env::var_os("P2GAME_NOVSYNC").is_none();
+    v.vsync = user_value(vm, OURS, "VSync").map(|s| truthy(&s)).unwrap_or(!cfg!(target_os = "android")) && std::env::var_os("P2GAME_NOVSYNC").is_none();
     v.fps_limit = std::env::var("P2GAME_FPS_LIMIT").ok().or_else(|| user_value(vm, OURS, "FrameRateLimit")).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
     v.brightness = ini_float(vm, "Brightness").unwrap_or(0.5).clamp(0.0, 1.0);
     v.contrast = ini_float(vm, "Contrast").unwrap_or(0.5).clamp(0.0, 2.0);
