@@ -54,6 +54,7 @@ mod dynmesh;
 mod smoke;
 #[cfg(feature = "window")]
 mod ui;
+mod touchctl;
 #[cfg(feature = "window")]
 mod settings;
 #[cfg(feature = "window")]

@@ -56,6 +56,9 @@ pub(crate) fn install(app: &mut App, sim: &mut Sim, game_root: &std::path::Path)
         let intro = std::env::args().skip_while(|a| a != "--intro-secs").nth(1).and_then(|s| s.parse().ok()).unwrap_or(120.0);
         crate::smoke::SmokeDriver::new(intro)
     });
+    app.insert_resource(crate::touchctl::TouchCtl::load())
+        .init_resource::<crate::touchctl::TouchOverlay>()
+        .add_systems(bevy::prelude::Update, crate::touchctl::overlay_system);
     app.add_plugins(CanvasPlugin { lib, clear: None }).insert_non_send(UiState { front, smoke, shots: Vec::new() });
 }
 
@@ -70,6 +73,8 @@ pub(crate) fn ui_frame(
     mouse: Res<ButtonInput<MouseButton>>,
     motion: Res<AccumulatedMouseMotion>,
     scroll: Res<AccumulatedMouseScroll>,
+    touches: Res<bevy::input::touch::Touches>,
+    mut touch: ResMut<crate::touchctl::TouchCtl>,
     mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
     mut commands: Commands,
     mut exit: MessageWriter<AppExit>,
@@ -97,6 +102,12 @@ pub(crate) fn ui_frame(
         let (ev, m) = drv.input(&mut sim.game, &ui.front);
         events = ev;
         mouse_pos = Some(m);
+    }
+    // Touch controls: menus get taps as clicks, the game gets the stick, the buttons and look drags.
+    let touched = crate::touchctl::frame(&mut touch, &touches, (win.width(), win.height()), capture.captured, dt, &mut |c: &str| ui.front.command_key(c));
+    events.extend(touched.events);
+    if let Some(p) = touched.mouse {
+        mouse_pos = Some(p);
     }
     let out = ui.front.frame(&mut sim.game, FrameInput { events: &events, typed: &typed, mouse: mouse_pos, width: w, height: h, dt });
     capture.captured = out.captured;

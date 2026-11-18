@@ -190,6 +190,11 @@ impl Frontend {
         Frontend { host: None, input, shell, level_key: 0, frames: 0, drive_player, menu_shown: false, map_scripts_menu: None }
     }
 
+    /// Tecla que el jugador tiene asignada a un comando (`Fire`, `Jump`, ...).
+    pub(crate) fn command_key(&self, command: &str) -> Option<Key> {
+        self.input.try_borrow().ok()?.bindings.command_key(command, 0)
+    }
+
     /// Writes `set input` changes to the user User.ini `[Engine.Input]` (UE2 saves on each rebind).
     fn save_rebinds(&self, game: &mut Game) {
         let changed = match self.input.try_borrow_mut() {
