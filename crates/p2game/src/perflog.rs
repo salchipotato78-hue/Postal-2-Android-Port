@@ -47,6 +47,7 @@ pub(crate) fn perf_system(
     time: Res<Time>,
     mut st: ResMut<PerfState>,
     mut texts: Query<&mut Text, With<FpsText>>,
+    overlay: Query<&Visibility, With<crate::touchctl::OverlayPart>>,
 ) {
     if !cfg!(target_os = "android") {
         return;
@@ -81,8 +82,11 @@ pub(crate) fn perf_system(
         for mut t in &mut texts {
             *t = Text::new(format!("{fps:.0} fps  {avg:.1} ms  peor {worst:.0} ms"));
         }
+        // Nodos del overlay táctil: visibles/total (para saber si se dibujan).
+        let total = overlay.iter().count();
+        let visible = overlay.iter().filter(|v| matches!(v, Visibility::Visible)).count();
         let line = format!(
-            "{} fps={fps:.1} media_ms={avg:.2} peor_ms={worst:.1} frames={}\n",
+            "{} fps={fps:.1} media_ms={avg:.2} peor_ms={worst:.1} frames={} overlay={visible}/{total}\n",
             unix_secs(),
             st.frames
         );
@@ -94,4 +98,33 @@ pub(crate) fn perf_system(
         st.total_ms = 0.0;
         st.worst_ms = 0.0;
     }
+}
+
+/// Escribe en `game_log.txt` cualquier pánico con su traza. En Android el mensaje de pánico no
+/// llega a logcat por la salida estándar, así que sin esto el crash no deja rastro.
+pub(crate) fn install_panic_hook() {
+    #[cfg(target_os = "android")]
+    {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let bt = std::backtrace::Backtrace::force_capture();
+            append_log(&format!("PANIC {} {info}\n{bt}\n", unix_secs()));
+            previous(info);
+        }));
+    }
+}
+
+#[cfg(target_os = "android")]
+fn append_log(text: &str) {
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(LOG_PATH) {
+        let _ = f.write_all(text.as_bytes());
+    }
+}
+
+/// Línea de informe (reparto de cada frame, distribución de tiempos). En escritorio va a la salida
+/// estándar; en Android también a `game_log.txt`, con la hora.
+pub(crate) fn report(line: &str) {
+    println!("{line}");
+    #[cfg(target_os = "android")]
+    append_log(&format!("{} {line}\n", unix_secs()));
 }
