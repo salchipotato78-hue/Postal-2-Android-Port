@@ -94,9 +94,11 @@ pub(crate) fn frame(
     size: (f32, f32),
     menu: bool,
     dt: f32,
+    scale: f32,
     resolve: &mut dyn FnMut(&str) -> Option<Key>,
 ) -> TouchFrame {
     let (w, h) = size;
+    // Positions are logical (points); the UI and the camera work in physical pixels.
     let min_side = w.min(h).max(1.0);
     let layout = ctl.layout.clone();
     let mut out = TouchFrame { events: Vec::new(), mouse: None };
@@ -131,13 +133,13 @@ pub(crate) fn frame(
         match f.zone {
             Zone::Look => {
                 if menu {
-                    out.mouse = Some((p.x, p.y));
+                    out.mouse = Some((p.x * scale, p.y * scale));
                 } else {
                     let d = p - f.last;
                     if d != Vec2::ZERO {
                         let g = layout.look_sensitivity;
-                        out.events.push(ev(Key::MOUSE_X, KeyAction::Axis, d.x * g));
-                        out.events.push(ev(Key::MOUSE_Y, KeyAction::Axis, -d.y * g));
+                        out.events.push(ev(Key::MOUSE_X, KeyAction::Axis, d.x * g * scale));
+                        out.events.push(ev(Key::MOUSE_Y, KeyAction::Axis, -d.y * g * scale));
                     }
                 }
             }
@@ -195,7 +197,7 @@ pub(crate) fn frame(
             out.events.push(ev(k, KeyAction::Release, 0.0));
         }
         if menu && (f.last - f.start).length() <= TAP_SLOP_PX && f.age <= TAP_MAX_SECS {
-            out.mouse = Some((f.last.x, f.last.y));
+            out.mouse = Some((f.last.x * scale, f.last.y * scale));
             out.events.push(ev(Key::LEFT_MOUSE, KeyAction::Press, 0.0));
             out.events.push(ev(Key::LEFT_MOUSE, KeyAction::Release, 0.0));
         }

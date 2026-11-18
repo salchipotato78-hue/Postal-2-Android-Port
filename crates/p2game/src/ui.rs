@@ -104,7 +104,9 @@ pub(crate) fn ui_frame(
         mouse_pos = Some(m);
     }
     // Touch controls: menus get taps as clicks, the game gets the stick, the buttons and look drags.
-    let touched = crate::touchctl::frame(&mut touch, &touches, (win.width(), win.height()), capture.captured, dt, &mut |c: &str| ui.front.command_key(c));
+    // Physical pixels per logical point: the UI works in physical pixels, touches come in logical.
+    let scale = win.physical_width() as f32 / win.width().max(1.0);
+    let touched = crate::touchctl::frame(&mut touch, &touches, (win.width(), win.height()), capture.captured, dt, scale, &mut |c: &str| ui.front.command_key(c));
     events.extend(touched.events);
     if let Some(p) = touched.mouse {
         mouse_pos = Some(p);
