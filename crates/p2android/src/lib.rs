@@ -43,6 +43,8 @@ mod smoke;
 mod ui;
 #[path = "../../p2game/src/touchctl.rs"]
 mod touchctl;
+#[path = "../../p2game/src/perflog.rs"]
+mod perflog;
 #[path = "../../p2game/src/settings.rs"]
 mod settings;
 #[path = "../../p2game/src/splash.rs"]
