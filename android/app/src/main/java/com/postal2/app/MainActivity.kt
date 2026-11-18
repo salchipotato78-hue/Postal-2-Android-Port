@@ -2,14 +2,19 @@ package com.postal2.app
 
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import java.io.File
+import java.io.FilterInputStream
+import java.io.InputStream
 import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
 
@@ -19,6 +24,8 @@ import kotlin.concurrent.thread
 class MainActivity : ComponentActivity() {
 
     private lateinit var status: TextView
+    private lateinit var progress: ProgressBar
+    private lateinit var progressText: TextView
     private lateinit var playButton: Button
     private lateinit var pickButton: Button
 
@@ -33,6 +40,17 @@ class MainActivity : ComponentActivity() {
             textSize = 16f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
+        }
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 1000
+            progress = 0
+            visibility = View.GONE
+        }
+        progressText = TextView(this).apply {
+            textSize = 14f
+            setTextColor(Color.LTGRAY)
+            gravity = Gravity.CENTER
+            visibility = View.GONE
         }
         pickButton = Button(this).apply {
             text = "Elegir ZIP de datos de POSTAL 2"
@@ -53,6 +71,8 @@ class MainActivity : ComponentActivity() {
             setBackgroundColor(Color.BLACK)
             setPadding(64, 64, 64, 64)
             addView(status)
+            addView(progress)
+            addView(progressText)
             addView(pickButton)
             addView(playButton)
         }
@@ -69,46 +89,75 @@ class MainActivity : ComponentActivity() {
         playButton.isEnabled = ready
     }
 
-    private fun importZip(uri: android.net.Uri) {
+    /// Muestra u oculta la barra de progreso y bloquea los botones mientras se extrae.
+    private fun setBusy(busy: Boolean) {
+        pickButton.isEnabled = !busy
+        playButton.isEnabled = !busy && gameRootFile().exists()
+        progress.visibility = if (busy) View.VISIBLE else View.GONE
+        progressText.visibility = if (busy) View.VISIBLE else View.GONE
+        progress.progress = 0
+        progressText.text = ""
+    }
+
+    private fun reportProgress(fraction: Float) {
+        runOnUiThread {
+            val pct = (fraction * 100).toInt().coerceIn(0, 100)
+            progress.progress = pct * 10
+            progressText.text = "Extrayendo… $pct %"
+        }
+    }
+
+    private fun importZip(uri: Uri) {
         status.text = "Extrayendo… no cierres la app."
-        pickButton.isEnabled = false
-        playButton.isEnabled = false
+        setBusy(true)
         thread {
             try {
+                val total = contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
                 val dest = extractDir()
                 if (dest.exists()) dest.deleteRecursively()
                 dest.mkdirs()
                 val destPath = dest.canonicalPath + File.separator
 
-                contentResolver.openInputStream(uri)?.use { input ->
-                    ZipInputStream(input).use { zin ->
-                        while (true) {
-                            val entry = zin.nextEntry ?: break
-                            val out = File(dest, entry.name).canonicalFile
-                            // Protección contra "zip slip": nada puede salir de la carpeta de destino.
-                            if (out.path.startsWith(destPath)) {
-                                if (entry.isDirectory) {
-                                    out.mkdirs()
-                                } else {
-                                    out.parentFile?.mkdirs()
-                                    out.outputStream().use { zin.copyTo(it) }
-                                }
+                val input = contentResolver.openInputStream(uri)
+                    ?: throw IllegalStateException("No se pudo abrir el ZIP")
+                // Cuenta los bytes del ZIP que se van leyendo: así el progreso es sobre el archivo real.
+                val counted = CountingStream(input)
+                var lastPct = -1
+                ZipInputStream(counted).use { zin ->
+                    while (true) {
+                        val entry = zin.nextEntry ?: break
+                        val out = File(dest, entry.name).canonicalFile
+                        // Protección contra "zip slip": nada puede salir de la carpeta de destino.
+                        if (out.path.startsWith(destPath)) {
+                            if (entry.isDirectory) {
+                                out.mkdirs()
+                            } else {
+                                out.parentFile?.mkdirs()
+                                out.outputStream().use { zin.copyTo(it) }
                             }
-                            zin.closeEntry()
+                        }
+                        zin.closeEntry()
+
+                        if (total > 0) {
+                            val pct = (counted.count * 100 / total).toInt().coerceIn(0, 100)
+                            if (pct != lastPct) {
+                                lastPct = pct
+                                reportProgress(counted.count.toFloat() / total)
+                            }
                         }
                     }
-                } ?: throw IllegalStateException("No se pudo abrir el ZIP")
+                }
 
                 val root = findGameRoot(dest)
                     ?: throw IllegalStateException("El ZIP no contiene las carpetas System/ y Maps/")
                 gameRootFile().writeText(root.absolutePath)
                 runOnUiThread {
-                    pickButton.isEnabled = true
+                    setBusy(false)
                     refresh("Datos importados.")
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    pickButton.isEnabled = true
+                    setBusy(false)
                     refresh("Error: ${e.message}")
                 }
             }
@@ -120,4 +169,22 @@ class MainActivity : ComponentActivity() {
         dir.walkTopDown().maxDepth(4).firstOrNull {
             it.isDirectory && File(it, "System").isDirectory && File(it, "Maps").isDirectory
         }
+}
+
+/// Stream que cuenta los bytes leídos. Sirve para calcular el progreso de la extracción.
+private class CountingStream(input: InputStream) : FilterInputStream(input) {
+    var count: Long = 0
+        private set
+
+    override fun read(): Int {
+        val r = super.read()
+        if (r >= 0) count++
+        return r
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        val r = super.read(b, off, len)
+        if (r > 0) count += r
+        return r
+    }
 }
