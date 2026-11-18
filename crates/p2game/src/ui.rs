@@ -58,7 +58,9 @@ pub(crate) fn install(app: &mut App, sim: &mut Sim, game_root: &std::path::Path)
     });
     app.insert_resource(crate::touchctl::TouchCtl::load())
         .init_resource::<crate::touchctl::TouchOverlay>()
-        .add_systems(bevy::prelude::Update, crate::touchctl::overlay_system);
+        .add_systems(bevy::prelude::Update, crate::touchctl::overlay_system)
+        .init_resource::<crate::perflog::PerfState>()
+        .add_systems(bevy::prelude::Update, crate::perflog::perf_system);
     app.add_plugins(CanvasPlugin { lib, clear: None }).insert_non_send(UiState { front, smoke, shots: Vec::new() });
 }
 

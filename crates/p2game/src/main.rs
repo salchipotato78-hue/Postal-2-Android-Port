@@ -55,6 +55,7 @@ mod smoke;
 #[cfg(feature = "window")]
 mod ui;
 mod touchctl;
+mod perflog;
 #[cfg(feature = "window")]
 mod settings;
 #[cfg(feature = "window")]
