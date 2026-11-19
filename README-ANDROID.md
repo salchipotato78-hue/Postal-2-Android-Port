@@ -17,8 +17,8 @@
 
 ## Pendiente (no está hecho ni probado)
 
-1. **Verificar la compilación de `p2android`.** Se escribió sin compilador. Puntos a revisar primero: que `#[bevy_main]` funcione en una `cdylib` (en lugar de un binario), la versión de `android-activity` que usa Bevy 0.19, y las dependencias de ventana de Linux (x11/wayland de `default_platform`) en el target Android. También puede haber llamadas a la API de Windows sin `cfg` en `window_memory.rs`. Ejecuta `cargo ndk` localmente o en el workflow y arregla los errores que salgan.
-2. **Regenerar `Cargo.lock`** (`cargo update -p p2android` o un `cargo build` normal) y luego volver a poner `--locked` en el workflow.
+1. **Verificar la compilación de `p2android` para Android.** Ya compila en host Linux con `cargo check -p p2android --lib` (rustc 1.95, con los headers de ALSA/Wayland/X11 instalados). Falta comprobarlo para `aarch64-linux-android` con `cargo ndk`, que es lo que ejecuta el workflow.
+2. **`Cargo.lock`:** ya está regenerado e incluye `p2touch` y `p2android`; `cargo metadata --locked` pasa. Mantén este lock en el repo: sin él, los workflows de escritorio con `--locked` fallan.
 3. **Integración de `p2touch` con Bevy:** dibujar los botones como overlay, enviar los toques a `p2input` y el arrastre a la cámara, y el editor de diseño dentro del juego (menú de ajustes táctiles).
 4. **Ultrawide:** conectar `projection_aspect` a la cámara de `p2view`.
 5. **Menús y pausa táctiles** en la UI de `p2canvas`.

@@ -4088,6 +4088,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "p2android"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "glam",
+ "p2anim",
+ "p2canvas",
+ "p2collide",
+ "p2fx",
+ "p2game",
+ "p2input",
+ "p2matinee",
+ "p2movie",
+ "p2nav",
+ "p2physics",
+ "p2save",
+ "p2sound",
+ "p2touch",
+ "p2view",
+ "upkg",
+ "uscript",
+ "winit",
+]
+
+[[package]]
 name = "p2anim"
 version = "0.1.0"
 dependencies = [
@@ -4152,6 +4177,7 @@ dependencies = [
  "p2physics",
  "p2save",
  "p2sound",
+ "p2touch",
  "p2view",
  "upkg",
  "uscript",
@@ -4217,6 +4243,10 @@ dependencies = [
  "rodio",
  "upkg",
 ]
+
+[[package]]
+name = "p2touch"
+version = "0.1.0"
 
 [[package]]
 name = "p2view"
