@@ -9,3 +9,7 @@ out_*.txt
 out_*.patch 
 out_*.diff 
 out_*.png 
+
+# Iconos del touch: el port los necesita en la APK
+!android/app/src/main/assets/touch/
+!android/app/src/main/assets/touch/*.png
