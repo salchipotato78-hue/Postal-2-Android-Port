@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -55,7 +56,7 @@ class EditorActivity : ComponentActivity() {
             { saveThrottled() },
             { saveAll() },
         )
-        val previewHeight = (resources.displayMetrics.heightPixels * 0.55f).toInt()
+        val previewHeight = (resources.displayMetrics.heightPixels * 0.42f).toInt()
 
         val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         for (item in items) controls.addView(section(item, preview))
@@ -127,7 +128,8 @@ class EditorActivity : ComponentActivity() {
         val label = TextView(this).apply {
             setTextColor(Color.WHITE)
             text = "$name ${"%.2f".format(Locale.US, value)}"
-            minWidth = 300
+            textSize = 14f
+            minWidth = 240
         }
         val seek = SeekBar(this).apply {
             max = 1000
@@ -228,6 +230,7 @@ private class LayoutPreview(
         try {
             context.assets.open("touch/$name").use { BitmapFactory.decodeStream(it) }
         } catch (e: Exception) {
+            Log.w("Postal2", "no se pudo cargar touch/$name: ${e.message}")
             null
         }
     }
@@ -266,14 +269,16 @@ private class LayoutPreview(
             val cy = item.y * h
             val alpha = if (item.visible) item.opacity else 0.25f
             val rect = RectF(cx - d / 2, cy - d / 2, cx + d / 2, cy + d / 2)
-            val icon = iconFor(item.key)
-            if (icon != null) {
-                drawIcon(c, icon, rect, alpha)
+            val bmp = iconFor(item.key)?.let { bitmap(it) }
+            if (bmp != null) {
+                drawBitmap(c, bmp, rect, alpha)
                 if (item.key == "stick") {
                     val k = d * 0.5f
-                    drawIcon(c, "joystick-adentro.png", RectF(cx - k / 2, cy - k / 2, cx + k / 2, cy + k / 2), alpha)
+                    val knob = bitmap("joystick-adentro.png")
+                    if (knob != null) drawBitmap(c, knob, RectF(cx - k / 2, cy - k / 2, cx + k / 2, cy + k / 2), alpha)
                 }
             } else {
+                // Sin icono (o no cargó): círculo con el nombre, para que siempre se vea dónde está.
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = 4f
                 paint.color = Color.rgb(230, 140, 60)
@@ -287,6 +292,12 @@ private class LayoutPreview(
                 paint.alpha = 255
             }
         }
+    }
+
+    private fun drawBitmap(c: Canvas, bmp: Bitmap, rect: RectF, alpha: Float) {
+        paint.alpha = (alpha * 255).toInt()
+        c.drawBitmap(bmp, null, rect, paint)
+        paint.alpha = 255
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {

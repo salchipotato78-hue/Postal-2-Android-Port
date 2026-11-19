@@ -8,11 +8,13 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.CheckBox
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import java.io.File
+import java.util.Locale
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.util.zip.ZipInputStream
@@ -28,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var progressText: TextView
     private lateinit var playButton: Button
     private lateinit var pickButton: Button
+    private lateinit var skipCheck: CheckBox
     private lateinit var editButton: Button
 
     private val pickZip = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -52,6 +55,11 @@ class MainActivity : ComponentActivity() {
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
             visibility = View.GONE
+        }
+        skipCheck = CheckBox(this).apply {
+            text = "Omitir expansiones y caché (ahorra espacio)"
+            setTextColor(Color.WHITE)
+            isChecked = true
         }
         pickButton = Button(this).apply {
             text = "Elegir ZIP de datos de POSTAL 2"
@@ -79,6 +87,7 @@ class MainActivity : ComponentActivity() {
             addView(status)
             addView(progress)
             addView(progressText)
+            addView(skipCheck)
             addView(pickButton)
             addView(playButton)
             addView(editButton)
@@ -117,6 +126,7 @@ class MainActivity : ComponentActivity() {
     private fun importZip(uri: Uri) {
         status.text = "Extrayendo… no cierres la app."
         setBusy(true)
+        val skip = skipCheck.isChecked
         thread {
             try {
                 val total = contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
@@ -133,6 +143,10 @@ class MainActivity : ComponentActivity() {
                 ZipInputStream(counted).use { zin ->
                     while (true) {
                         val entry = zin.nextEntry ?: break
+                        if (skip && isOptional(entry.name)) {
+                            zin.closeEntry()
+                            continue
+                        }
                         val out = File(dest, entry.name).canonicalFile
                         // Protección contra "zip slip": nada puede salir de la carpeta de destino.
                         if (out.path.startsWith(destPath)) {
@@ -170,6 +184,13 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /// Carpetas que el motor no necesita para el juego base: expansiones (si no las tienes, no se usan)
+    /// y caché. Movies se mantiene: las cinemáticas la usan.
+    private val optionalDirs = setOf("paradise lost", "sharethepain", "emptysteamdepot", "cache")
+
+    private fun isOptional(name: String): Boolean =
+        name.split('/', '\\').any { it.lowercase(Locale.ROOT) in optionalDirs }
 
     /// Busca la carpeta que contiene System/ y Maps/ (hasta 4 niveles, porque el ZIP suele traer una carpeta envolvente).
     private fun findGameRoot(dir: File): File? =
