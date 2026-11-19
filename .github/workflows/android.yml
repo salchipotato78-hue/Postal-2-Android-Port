@@ -41,7 +41,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
           cargo ndk -t arm64-v8a -P 26 -o android/app/src/main/jniLibs \
-            build --profile release -p p2android --lib
+            build --profile dist -p p2android --lib
 
       - name: Build APK
         working-directory: android

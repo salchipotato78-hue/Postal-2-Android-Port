@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 # Same set as p2game's `window` feature.
 [dependencies]
 upkg.workspace = true
+p2touch = { path = "../p2touch" }
 p2game = { path = "../p2game" }
 uscript = { path = "../uscript" }
 p2nav = { path = "../p2nav" }

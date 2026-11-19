@@ -61,6 +61,23 @@ impl Action {
         }
     }
 
+    /// Nombre del comando del juego. Los bindings del jugador deciden qué tecla lo dispara.
+    pub fn command(self) -> &'static str {
+        match self {
+            Action::Fire => "Fire",
+            Action::AltFire => "AltFire",
+            Action::Reload => "Reload",
+            Action::Jump => "Jump",
+            Action::Crouch => "Duck",
+            Action::Use => "Use",
+            Action::Pause => "Pause",
+            Action::Holster => "Holster",
+            Action::Kick => "Kick",
+            Action::NextWeapon => "NextWeapon",
+            Action::PrevWeapon => "PrevWeapon",
+        }
+    }
+
     pub fn parse(s: &str) -> Option<Action> {
         Action::ALL.iter().copied().find(|a| a.name() == s)
     }
@@ -99,24 +116,32 @@ fn clamp01(v: f32) -> f32 {
 }
 
 impl Default for Layout {
-    /// Diseño inicial: solo los botones necesarios. Se puede mover, escalar y ocultar desde el editor.
+    /// Diseño de `Postal2-touch/layout.png` (coordenadas del centro y tamaño en fracción de la altura).
+    /// Holster y PrevWeapon no tienen icono en el diseño: quedan ocultos por defecto.
     fn default() -> Self {
-        let b = |action, x, y, size| Button { action, x, y, size, opacity: 0.7, visible: true };
+        let b = |action, x, y, size, visible| Button { action, x, y, size, opacity: 0.8, visible };
         Layout {
-            stick: Stick { x: 0.16, y: 0.72, size: 0.30, opacity: 0.5, visible: true },
+            stick: Stick { x: 0.106, y: 0.794, size: 0.235, opacity: 0.8, visible: true },
             look_sensitivity: 1.0,
             buttons: vec![
-                b(Action::Fire, 0.88, 0.74, 0.16),
-                b(Action::AltFire, 0.70, 0.88, 0.11),
-                b(Action::Jump, 0.92, 0.50, 0.11),
-                b(Action::Crouch, 0.78, 0.60, 0.09),
-                b(Action::Reload, 0.60, 0.70, 0.09),
-                b(Action::Use, 0.92, 0.32, 0.09),
-                b(Action::Pause, 0.95, 0.06, 0.08),
+                b(Action::Fire, 0.869, 0.805, 0.20, true),
+                b(Action::AltFire, 0.832, 0.923, 0.07, true),
+                b(Action::Reload, 0.051, 0.601, 0.17, true),
+                b(Action::Jump, 0.920, 0.695, 0.14, true),
+                b(Action::Crouch, 0.934, 0.884, 0.125, true),
+                b(Action::Use, 0.818, 0.704, 0.14, true),
+                b(Action::Kick, 0.791, 0.843, 0.14, true),
+                b(Action::NextWeapon, 0.973, 0.573, 0.11, true),
+                b(Action::Pause, 0.964, 0.058, 0.075, true),
+                b(Action::Holster, 0.60, 0.90, 0.08, false),
+                b(Action::PrevWeapon, 0.55, 0.90, 0.08, false),
             ],
         }
     }
 }
+
+/// Cabecera del formato. La versión sirve para reescribir diseños viejos (ver `TouchCtl::load`).
+pub const LAYOUT_HEADER: &str = "# Postal 2 touch layout v3";
 
 impl Layout {
     pub fn button(&self, action: Action) -> Option<&Button> {
@@ -203,9 +228,31 @@ impl Layout {
         (dx * scale, dy * scale)
     }
 
+    /// Mantiene cada control (círculo) completo dentro de la pantalla de w×h.
+    /// El radio se mide en la unidad del lado menor, igual que el dibujo.
+    pub fn fit(&mut self, w: f32, h: f32) {
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
+        let min_side = w.min(h);
+        let fit_center = |x: f32, y: f32, size: f32| {
+            let rx = (size * min_side * 0.5 / w).min(0.5);
+            let ry = (size * min_side * 0.5 / h).min(0.5);
+            (x.clamp(rx, 1.0 - rx), y.clamp(ry, 1.0 - ry))
+        };
+        let (sx, sy) = fit_center(self.stick.x, self.stick.y, self.stick.size);
+        self.stick.x = sx;
+        self.stick.y = sy;
+        for b in &mut self.buttons {
+            let (x, y) = fit_center(b.x, b.y, b.size);
+            b.x = x;
+            b.y = y;
+        }
+    }
+
     /// Serializa el diseño en el formato de texto documentado arriba.
     pub fn to_text(&self) -> String {
-        let mut out = String::from("# Postal 2 touch layout\n");
+        let mut out = format!("{LAYOUT_HEADER}\n");
         let s = &self.stick;
         let _ = writeln!(out, "stick {:.3} {:.3} {:.3} {:.3} {}", s.x, s.y, s.size, s.opacity, s.visible as u8);
         let _ = writeln!(out, "look {:.3}", self.look_sensitivity);

@@ -709,7 +709,7 @@ fn tick_script(time: Res<Time>, keys: Res<ButtonInput<KeyCode>>, ui: Res<crate::
     let dt = time.delta_secs().clamp(0.0, 0.2);
     let t_tick = std::time::Instant::now();
     sim.game.tick(dt);
-    if let Some(lim) = std::env::var("P2GAME_SPIKES").ok().and_then(|s| s.parse::<f64>().ok()) {
+    if let Some(lim) = crate::envflags::get("P2GAME_SPIKES").and_then(|s| s.parse::<f64>().ok()) {
         let ms = t_tick.elapsed().as_secs_f64() * 1000.0;
         if ms > lim {
             println!("SPIKE world tick {ms:.1} ms");
@@ -767,7 +767,7 @@ fn merge_statics(mut commands: Commands, mut sim: NonSendMut<Sim>, mut meshes: R
 /// runtime static meshes, effects, attachments).
 fn perf_hide(mut q: Query<(&mut Visibility, Has<bevy::mesh::skinning::SkinnedMesh>, Has<LevelEntity>), With<Mesh3d>>, mut what: Local<Option<(bool, bool, bool)>>) {
     let (s, l, o) = *what.get_or_insert_with(|| {
-        let v = std::env::var("P2GAME_HIDE").unwrap_or_default();
+        let v = crate::envflags::get("P2GAME_HIDE").unwrap_or_default();
         (v.contains("skinned"), v.contains("level"), v.contains("other"))
     });
     if !(s || l || o) {
@@ -1000,7 +1000,7 @@ pub(crate) fn cam_rot(yaw: f32, pitch: f32) -> Quat {
 /// same viewpoints regardless of where the player walked.
 fn cam_override(sim: NonSend<Sim>, mut cams: Query<&mut Transform, (With<Camera3d>, Without<outdoor::SkyCamera>)>, mut steps: Local<Option<Vec<(u64, [f32; 5])>>>) {
     let steps = steps.get_or_insert_with(|| {
-        std::env::var("P2GAME_CAM_AT")
+        crate::envflags::get("P2GAME_CAM_AT")
             .unwrap_or_default()
             .split(';')
             .filter_map(|s| {
@@ -1158,18 +1158,18 @@ fn report(
         let sys = SYS_TIMES.with(|t| std::mem::take(&mut *t.borrow_mut()));
         let sys_ms: f64 = sys.iter().map(|s| s.1).sum::<f64>() / frames;
         let sys_list = sys.iter().map(|(n, ms)| format!("{n} {:.2}", ms / frames)).collect::<Vec<_>>().join("  ");
-        println!(
+        crate::perflog::report(&format!(
             "frame {frame_ms:.1} ms ({:.0} fps): game {game_ms:.2} ms [{list}]  systems {sys_ms:.2} ms [{sys_list}]  render+other {:.1} ms",
             1000.0 / frame_ms.max(0.001),
             frame_ms - game_ms - sys_ms
-        );
+        ));
         // Frame-time distribution since the last report (smoothness / hitches).
         if !fr.dts.is_empty() {
             let mut d = std::mem::take(&mut fr.dts);
             d.sort_by(f32::total_cmp);
             let pct = |p: f32| d[((d.len() - 1) as f32 * p).round() as usize];
             let over = |ms: f32| d.iter().filter(|&&x| x > ms).count();
-            println!("frametimes: n {} p50 {:.1} p95 {:.1} p99 {:.1} max {:.1} ms, over 25 ms {} over 33 ms {} over 50 ms {}", d.len(), pct(0.5), pct(0.95), pct(0.99), d[d.len() - 1], over(25.0), over(33.3), over(50.0));
+            crate::perflog::report(&format!("frametimes: n {} p50 {:.1} p95 {:.1} p99 {:.1} max {:.1} ms, over 25 ms {} over 33 ms {} over 50 ms {}", d.len(), pct(0.5), pct(0.95), pct(0.99), d[d.len() - 1], over(25.0), over(33.3), over(50.0)));
         }
     }
 }

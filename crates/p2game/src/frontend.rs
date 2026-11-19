@@ -190,6 +190,11 @@ impl Frontend {
         Frontend { host: None, input, shell, level_key: 0, frames: 0, drive_player, menu_shown: false, map_scripts_menu: None }
     }
 
+    /// Tecla que el jugador tiene asignada a un comando (`Fire`, `Jump`, ...).
+    pub(crate) fn command_key(&self, command: &str) -> Option<Key> {
+        self.input.try_borrow().ok()?.bindings.command_key(command, 0)
+    }
+
     /// Writes `set input` changes to the user User.ini `[Engine.Input]` (UE2 saves on each rebind).
     fn save_rebinds(&self, game: &mut Game) {
         let changed = match self.input.try_borrow_mut() {
@@ -278,7 +283,7 @@ impl Frontend {
         let map = game.level.map.name.to_ascii_lowercase();
         let startup = game.world.cfg.startup_map.to_ascii_lowercase();
         let startup = std::path::Path::new(&startup).file_stem().and_then(|s| s.to_str()).unwrap_or("startup").to_string();
-        if !self.menu_shown && self.frames == 1 && std::env::var_os("P2GAME_UI_TRACE").is_some() {
+        if !self.menu_shown && self.frames == 1 && crate::envflags::set("P2GAME_UI_TRACE") {
             println!("frontend: map {map:?} startup {startup:?} base_menu {:?}", mh.base_menu);
         }
         // The startup map's script first runs the shell's precache pass (ShowMenu with bPrecache,
@@ -300,16 +305,16 @@ impl Frontend {
             self.map_scripts_menu = Some(scripted);
         }
         let show_now = show_now && self.map_scripts_menu != Some(true);
-        if !self.menu_shown && show_now && map == startup && std::env::var_os("P2GAME_NO_AUTOMENU").is_none() {
+        if !self.menu_shown && show_now && map == startup && !crate::envflags::set("P2GAME_NO_AUTOMENU") {
             if let Some(root) = mh.base_menu {
                 let c = vm.objects[root].class;
                 if let Err(e) = vm.call(c, Some(root), "ShowMenu", vec![]) {
                     vm.record_error("ShowMenu", &e);
-                    if std::env::var_os("P2GAME_UI_TRACE").is_some() {
+                    if crate::envflags::set("P2GAME_UI_TRACE") {
                         println!("frontend: ShowMenu error {e:?}");
                     }
                 }
-                if std::env::var_os("P2GAME_UI_TRACE").is_some() {
+                if crate::envflags::set("P2GAME_UI_TRACE") {
                     println!("frontend: after ShowMenu root {} state {} visible {:?}", vm.object_name(root), vm.state_name(root), vm.get_prop(root, "bWindowVisible"));
                 }
             }
@@ -322,7 +327,7 @@ impl Frontend {
         if let Some(l) = vm.level {
             let t = vm.get_prop(l, "TimeSecondsAlways").map(|v| v.as_float()).unwrap_or(0.0) + dt.min(0.05);
             vm.set_prop(l, "TimeSecondsAlways", Value::Float(t));
-            if std::env::var_os("P2GAME_SCREEN_TRACE").is_some() {
+            if crate::envflags::set("P2GAME_SCREEN_TRACE") {
                 if let Some(Value::Array(locals)) = vm.get_prop(mh.player, "LocalInteractions").cloned() {
                     for s in locals.iter().filter_map(|v| v.as_obj()).filter(|&o| vm.class_is_a(vm.objects[o].class, "P2Screen")) {
                         if vm.get_prop(s, "bActive").is_some_and(|v| v.as_bool()) {
@@ -334,7 +339,7 @@ impl Frontend {
         }
 
         // Mouse: the UWindow cursor follows the OS cursor.
-        let tr = std::env::var_os("P2GAME_UI_TRACE").is_some() && (3..7).contains(&self.frames);
+        let tr = crate::envflags::set("P2GAME_UI_TRACE") && (3..7).contains(&self.frames);
         let phase = |vm: &Vm, mh: &MenuHost, what: &str| {
             if tr {
                 if let Some(r) = mh.base_menu {
@@ -357,7 +362,7 @@ impl Frontend {
         // Keys: interactions first, then bindings.
         let mut events = inp.events.to_vec();
         // Test hook: `P2GAME_HOLD=W:30:120` holds a key from frame 30 to 120 (reports pawn movement).
-        if let Ok(spec) = std::env::var("P2GAME_HOLD") {
+        if let Some(spec) = crate::envflags::get("P2GAME_HOLD") {
             for one in spec.split(';') {
                 hold_hook(one, vm, pc, self.frames, &mut events, game.host.world.borrow().is_some());
             }
@@ -372,7 +377,7 @@ impl Frontend {
                 }
             }
         }
-        let key_trace = std::env::var_os("P2GAME_KEY_TRACE").is_some();
+        let key_trace = crate::envflags::set("P2GAME_KEY_TRACE");
         for e in events {
             if e.key.is_axis() {
                 if out.captured {
@@ -412,7 +417,7 @@ impl Frontend {
                 let pj0 = vm.get_prop(pc, "bPressedJump").is_some_and(|v| v.as_bool());
                 let phys0 = vm.get_prop(pc, "Pawn").and_then(|v| v.as_obj()).and_then(|p| vm.get_prop(p, "Physics")).map(|v| v.as_int());
                 vm.fire_event(pc, "PlayerTick", vec![Value::Float(dt)]);
-                if std::env::var_os("P2GAME_JUMP_TRACE").is_some() {
+                if crate::envflags::set("P2GAME_JUMP_TRACE") {
                     thread_local!(static LAST: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) });
                     let pawn = vm.get_prop(pc, "Pawn").and_then(|v| v.as_obj());
                     let phys = pawn.and_then(|p| vm.get_prop(p, "Physics")).map(|v| v.as_int());
@@ -488,7 +493,7 @@ impl Frontend {
                     }
                 }
                 // `P2GAME_JUMP_TRACE=1`: the controller/pawn state on every frame a jump was pressed.
-                if pj0 && phys0.is_some() && std::env::var_os("P2GAME_JUMP_TRACE").is_some() {
+                if pj0 && phys0.is_some() && crate::envflags::set("P2GAME_JUMP_TRACE") {
                     let pawn = vm.get_prop(pc, "Pawn").and_then(|v| v.as_obj());
                     let g = |n: &str| pawn.and_then(|p| vm.get_prop(p, n)).cloned();
                     println!(
@@ -504,7 +509,7 @@ impl Frontend {
                         vm.get_prop(pc, "bPressedJump"),
                     );
                 }
-                if std::env::var_os("P2GAME_ROT_TRACE").is_some() && self.frames % 30 == 0 {
+                if crate::envflags::set("P2GAME_ROT_TRACE") && self.frames % 30 == 0 {
                     let in_phys = p2game::physics::current().map(|h| h.bridge.borrow().phys(pc).is_some());
                     println!("ROT@{} before {:?} after {:?} aTurn {:?} pc in physics {in_phys:?} phys {:?}", self.frames, r0, vm.get_prop(pc, "Rotation"), vm.get_prop(pc, "aTurn"), vm.get_prop(pc, "Physics"));
                 }
@@ -591,7 +596,7 @@ impl InputTarget for PcTarget<'_> {
         // `P2GAME_JUMP_TRACE=1`: the foot weapon's state around every kick (a stuck NormalFire
         // blocks later kicks).
         let verb = command.split_whitespace().next().unwrap_or("");
-        let kick = (verb.eq_ignore_ascii_case("DoKick") || verb.eq_ignore_ascii_case("Jump")) && std::env::var_os("P2GAME_JUMP_TRACE").is_some();
+        let kick = (verb.eq_ignore_ascii_case("DoKick") || verb.eq_ignore_ascii_case("Jump")) && crate::envflags::set("P2GAME_JUMP_TRACE");
         let foot_state = |vm: &Vm, pc: ObjId| {
             let pawn = vm.get_prop(pc, "Pawn").and_then(|v| v.as_obj());
             let pl = pawn.map(|p| vm.actor_loc(p)).unwrap_or_default();
@@ -628,7 +633,7 @@ impl InputTarget for PcTarget<'_> {
             let pj = self.vm.get_prop(self.pc, "bPressedJump").is_some_and(|v| v.as_bool());
             println!("EXEC {verb} pc {} paused {paused} pressedjump {pj} before [{b}] after [{}]", self.vm.state_name(self.pc), foot_state(self.vm, self.pc));
         }
-        if std::env::var_os("P2GAME_KEY_TRACE").is_some() {
+        if crate::envflags::set("P2GAME_KEY_TRACE") {
             println!("KEY exec {command:?} -> {ok}");
         }
         ok
@@ -677,7 +682,7 @@ pub(crate) fn exec_command(vm: &mut Vm, pc: ObjId, command: &str) -> bool {
     // Not an exec function: the engine console chain (UInput::Exec for `set input`/key queries,
     // then the host's console commands).
     let reply = natives::console_command(vm, Some(pc), command);
-    if std::env::var_os("P2GAME_EXEC").is_some() {
+    if crate::envflags::set("P2GAME_EXEC") {
         if let Some(r) = reply.filter(|r| !r.is_empty()) {
             println!("   console reply: {r}");
         }

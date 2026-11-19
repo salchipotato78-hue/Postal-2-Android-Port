@@ -58,7 +58,7 @@ impl uscript::host::Host for ViewportExt {
     }
 
     fn actor_spawned(&self, vm: &mut uscript::vm::Vm, actor: ObjId) {
-        if std::env::var("P2GAME_FP_TRACE").is_ok() {
+        if crate::envflags::set("P2GAME_FP_TRACE") {
             let c = &vm.classes[vm.objects[actor].class].name;
             if !c.starts_with("ScriptedTrigger") {
                 println!("SPAWN {} at {:?}", c, vm.get_prop(actor, "Location").map(|v| v.as_vec()));
@@ -68,7 +68,7 @@ impl uscript::host::Host for ViewportExt {
 
     fn actor_destroyed(&self, vm: &mut uscript::vm::Vm, actor: ObjId) {
         // Diagnostics: who destroys player pawns (`P2GAME_FP_TRACE`).
-        if std::env::var("P2GAME_FP_TRACE").is_err() {
+        if !crate::envflags::set("P2GAME_FP_TRACE") {
             return;
         }
         let c = vm.objects[actor].class;
@@ -135,7 +135,7 @@ thread_local! {
 fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<String>, mut seen_log: Local<usize>, mut commands: Commands, mut exit: MessageWriter<AppExit>) {
     *frame += 1;
     let f = *frame;
-    if let Ok(spec) = std::env::var("P2GAME_SHOTS") {
+    if let Some(spec) = crate::envflags::get("P2GAME_SHOTS") {
         for item in spec.split(';') {
             if let Some((n, path)) = item.split_once(':') {
                 if n.trim().parse::<u32>().ok() == Some(f) {
@@ -150,9 +150,9 @@ fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<St
     // Scripted runs always end: at or after frame P2GAME_EXIT, and after P2GAME_EXIT_SECS of wall
     // time (default 120 s whenever P2GAME_SHOTS or P2GAME_EXIT is set) so a run whose frame count
     // stalls (loading, a paused map screen) never leaves the window open.
-    let exit_frame = std::env::var("P2GAME_EXIT").ok().and_then(|s| s.trim().parse::<u32>().ok());
-    let automated = exit_frame.is_some() || std::env::var_os("P2GAME_SHOTS").is_some();
-    let limit = std::env::var("P2GAME_EXIT_SECS").ok().and_then(|s| s.trim().parse::<f32>().ok()).or(automated.then_some(120.0));
+    let exit_frame = crate::envflags::get("P2GAME_EXIT").and_then(|s| s.trim().parse::<u32>().ok());
+    let automated = exit_frame.is_some() || crate::envflags::set("P2GAME_SHOTS");
+    let limit = crate::envflags::get("P2GAME_EXIT_SECS").and_then(|s| s.trim().parse::<f32>().ok()).or(automated.then_some(120.0));
     static STARTED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
     let started = *STARTED.get_or_init(std::time::Instant::now);
     let over_time = limit.is_some_and(|l| started.elapsed().as_secs_f32() > l);
@@ -177,7 +177,7 @@ fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<St
         if f % 60 == 0 && from != usize::MAX {
             for &a in vm.actors.iter().skip(from) {
                 let hidden = vm.get_prop(a, "bHidden").is_some_and(|v| v.as_bool());
-                if vm.objects[a].deleted || (hidden && std::env::var_os("P2GAME_TRACK_HIDDEN").is_none()) {
+                if vm.objects[a].deleted || (hidden && !crate::envflags::set("P2GAME_TRACK_HIDDEN")) {
                     continue;
                 }
                 let dt = vm.get_prop(a, "DrawType").map(|v| v.as_int()).unwrap_or(0);
@@ -189,7 +189,7 @@ fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<St
             }
         }
     });
-    if std::env::var("P2GAME_FP_TRACE").is_ok() {
+    if crate::envflags::set("P2GAME_FP_TRACE") {
         // Report pawn health changes (and the controller state), with recent log lines.
         let pawn = vm.get_prop(pc, "Pawn").and_then(|v| v.as_obj());
         let h = pawn.and_then(|p| vm.get_prop(p, "Health")).map(|v| v.as_int());
@@ -212,7 +212,7 @@ fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<St
         }
         *seen_log = n;
     }
-    if std::env::var_os("P2GAME_ANIM_TRACE").is_some() {
+    if crate::envflags::set("P2GAME_ANIM_TRACE") {
         let host = &anim_host;
         // Player weapon / pawn channel-0 anim: logs each sequence start and end with wall time,
         // so durations can be compared with frames / rate from the ukx.
@@ -236,7 +236,7 @@ fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<St
             });
         }
     }
-    if let Ok(spec) = std::env::var("P2GAME_EXEC") {
+    if let Some(spec) = crate::envflags::get("P2GAME_EXEC") {
         for item in spec.split(';') {
             let Some((n, cmd)) = item.split_once(':') else { continue };
             if n.trim().parse::<u32>().ok() == Some(f) {
@@ -360,7 +360,7 @@ fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<St
                         }
                     }
                 }
-                if std::env::var("P2GAME_FP_TRACE").is_ok() {
+                if crate::envflags::set("P2GAME_FP_TRACE") {
                     let pawn = vm.get_prop(pc, "Pawn").and_then(|v| v.as_obj());
                     let pend = pawn.and_then(|p| vm.get_prop(p, "PendingWeapon")).and_then(|v| v.as_obj());
                     println!("   pending after exec: {:?} pc state {} errors {:?}", pend.map(|o| vm.object_name(o)), vm.state_name(pc), vm.script_errors.iter().filter(|(_, n)| **n > 0).take(8).collect::<Vec<_>>());
@@ -381,12 +381,12 @@ fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<St
             }
         }
     }
-    if std::env::var("P2GAME_PROBE").ok().and_then(|s| s.parse::<u32>().ok()).is_some_and(|p| p == f || (f > p && (f - p) % 60 == 0 && f < p + 600)) {
+    if crate::envflags::get("P2GAME_PROBE").and_then(|s| s.parse::<u32>().ok()).is_some_and(|p| p == f || (f > p && (f - p) % 60 == 0 && f < p + 600)) {
         probe(&sim.game.world.vm, Some(&sim.game.host), pc, f);
     }
     // `P2GAME_POS_EVERY=N`: the player's position, yaw/pitch, physics and map every N frames
     // (for scripting real-input walks).
-    if let Some(n) = std::env::var("P2GAME_POS_EVERY").ok().and_then(|s| s.parse::<u32>().ok()).filter(|n| *n > 0) {
+    if let Some(n) = crate::envflags::get("P2GAME_POS_EVERY").and_then(|s| s.parse::<u32>().ok()).filter(|n| *n > 0) {
         if f % n == 0 {
             let vm = &sim.game.world.vm;
             let pawn = vm.get_prop(pc, "Pawn").and_then(|v| v.as_obj()).filter(|&p| !vm.objects[p].deleted);
@@ -408,7 +408,7 @@ fn exec_hook(mut sim: NonSendMut<Sim>, mut frame: Local<u32>, mut last: Local<St
                 vm.get_prop(pc, "PlayerInput").and_then(|v| v.as_obj()).and_then(|_| vm.get_prop(pc, "aTurn")).map(|v| v.as_float()),
                 vm.get_prop(pc, "ViewTarget").and_then(|v| v.as_obj()).map(|o| vm.object_name(o))
             );
-            if std::env::var_os("P2GAME_POS_TURN").is_some() {
+            if crate::envflags::set("P2GAME_POS_TURN") {
                 let g = |n: &str| vm.get_prop(pc, n).cloned();
                 println!("   turn: bTurnToNearest {:?} bTurn180 {:?} bFreeCamera {:?} bBehindView {:?} DesiredRotation {:?} TurnTarget {:?} pawn rot {:?}", g("bTurnToNearest"), g("bTurn180"), g("bFreeCamera"), g("bBehindView"), g("DesiredRotation"), g("TurnTarget"), pawn.map(|p| vm.actor_rot(p)));
             }
@@ -704,7 +704,7 @@ fn canvas_meshes(
                     commands.spawn((Mesh3d(m), MeshMaterial3d(mat), Transform::from_matrix(cm * actor_world(vm, *a) * ci), RenderLayers::layer(CANVAS_MESH_LAYER))).id()
                 })
                 .collect();
-            if std::env::var_os("P2GAME_FP_TRACE").is_some() {
+            if crate::envflags::set("P2GAME_FP_TRACE") {
                 println!("canvas mesh {} {path} at {:?}: {} sections", vm.object_name(*a), vm.actor_loc(*a), es.len());
             }
             st.shown.insert(*a, (path.clone(), es));
@@ -741,11 +741,11 @@ struct FpKeyLight;
 
 /// View-model lighting, tunable with `P2GAME_FP_AMBIENT` / `P2GAME_FP_KEY`.
 fn fp_ambient() -> f32 {
-    std::env::var("P2GAME_FP_AMBIENT").ok().and_then(|s| s.parse().ok()).unwrap_or(1000.0)
+    crate::envflags::get("P2GAME_FP_AMBIENT").and_then(|s| s.parse().ok()).unwrap_or(1000.0)
 }
 
 fn fp_key() -> f32 {
-    std::env::var("P2GAME_FP_KEY").ok().and_then(|s| s.parse().ok()).unwrap_or(9500.0)
+    crate::envflags::get("P2GAME_FP_KEY").and_then(|s| s.parse().ok()).unwrap_or(9500.0)
 }
 
 /// A first-person rig for one VM actor.
@@ -873,14 +873,14 @@ fn fp_weapon(
     let Ok((mut cam_tf, mut proj, mut cam)) = cams.single_mut() else { return };
 
     let wanted: Vec<(ObjId, f32)> = draws.iter().filter_map(|d| d.actor.map(|a| (a, d.fov))).filter(|(a, _)| !vm.objects[*a].deleted).collect();
-    if std::env::var_os("P2GAME_FP_TRACE").is_some() && st.logged < 3 && !draws.is_empty() {
+    if crate::envflags::set("P2GAME_FP_TRACE") && st.logged < 3 && !draws.is_empty() {
         st.logged += 1;
         for d in &draws {
             let a = d.actor.map(|a| (vm.object_name(a), vm.get_prop(a, "Mesh").cloned(), vm.actor_loc(a)));
             println!("FP DrawActor {a:?} fov {} clearz {}", d.fov, d.clear_z);
         }
     }
-    cam.is_active = !wanted.is_empty() && std::env::var_os("P2GAME_NO_FP").is_none();
+    cam.is_active = !wanted.is_empty() && !crate::envflags::set("P2GAME_NO_FP");
 
     // Camera: the canvas camera (the player's eye and view rotation) with the weapon's DisplayFOV
     // (horizontal degrees, as UE2), converted to Bevy's vertical FOV.
@@ -911,7 +911,7 @@ fn fp_weapon(
         // fixed above-behind the eye lit the visible side always (FIDELITY #15, flat and bright).
         // Where the sun does not reach the eye (indoors, no Sunlight) the earlier view-fixed key
         // stays (stand-in for the room's point lights; no original indoor reference yet).
-        let sun_dir = sun.map(|s| s.1.forward().as_vec3()).filter(|d| std::env::var_os("P2GAME_FP_VIEW_KEY").is_none() && sun_reaches(c.location, *d));
+        let sun_dir = sun.map(|s| s.1.forward().as_vec3()).filter(|d| !crate::envflags::set("P2GAME_FP_VIEW_KEY") && sun_reaches(c.location, *d));
         let key_dir = sun_dir.unwrap_or(fwd * 0.8 - up * 0.6 + right * 0.3);
         *ltf = Transform::from_translation(pos).looking_to(key_dir, if key_dir.normalize_or_zero().y.abs() > 0.99 { fwd } else { Vec3::Y });
         // UE2 lights the view model with the level's lights like any actor: outdoors the warm
@@ -921,7 +921,7 @@ fn fp_weapon(
             light.color = color;
         }
     }
-    if std::env::var_os("P2GAME_FP_TRACE").is_some() && st.logged < 6 && !wanted.is_empty() {
+    if crate::envflags::set("P2GAME_FP_TRACE") && st.logged < 6 && !wanted.is_empty() {
         st.logged += 1;
         let a = wanted[0].0;
         println!(

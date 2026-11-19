@@ -7,6 +7,7 @@ version.workspace = true
 
 [dependencies]
 upkg.workspace = true
+p2touch = { path = "../p2touch" }
 uscript = { path = "../uscript" }
 p2nav = { path = "../p2nav" }
 p2anim = { path = "../p2anim" }
