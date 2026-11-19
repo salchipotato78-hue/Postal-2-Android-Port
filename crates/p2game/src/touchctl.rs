@@ -385,11 +385,13 @@ pub(crate) fn overlay_system(
         place(&mut node, x, y, size, dx, dy);
         let show = visible && !ctl.menu;
         *vis = if show { Visibility::Visible } else { Visibility::Hidden };
+        // Con imagen: el fondo del nodo se deja transparente (Bevy da a cada Node un fondo por defecto).
+        let has_image = image.is_some();
         if let Some(mut img) = image {
             img.color = Color::srgba(1.0, 1.0, 1.0, opacity);
         }
         if let Some(mut bg) = bg {
-            bg.0 = tint.with_alpha(opacity);
+            bg.0 = if has_image { Color::NONE } else { tint.with_alpha(opacity) };
         }
     }
 }

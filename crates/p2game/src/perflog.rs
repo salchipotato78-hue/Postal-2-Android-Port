@@ -49,6 +49,7 @@ pub(crate) fn perf_system(
     mut texts: Query<&mut Text, With<FpsText>>,
     overlay: Query<&Visibility, With<crate::touchctl::OverlayPart>>,
     meshes: Query<&Visibility, bevy::ecs::query::Or<(bevy::prelude::With<Mesh3d>, bevy::prelude::With<Mesh2d>)>>,
+    touch: Res<crate::touchctl::TouchCtl>,
 ) {
     if !cfg!(target_os = "android") {
         return;
@@ -92,9 +93,10 @@ pub(crate) fn perf_system(
         let mesh_total = meshes.iter().count();
         let mesh_vis = meshes.iter().filter(|v| !matches!(v, Visibility::Hidden)).count();
         let line = format!(
-            "{} fps={fps:.1} media_ms={avg:.2} peor_ms={worst:.1} frames={} overlay={visible}/{total} mallas={mesh_vis}/{mesh_total}\n",
+            "{} fps={fps:.1} media_ms={avg:.2} peor_ms={worst:.1} frames={} overlay={visible}/{total} mallas={mesh_vis}/{mesh_total} menu={}\n",
             unix_secs(),
-            st.frames
+            st.frames,
+            touch.menu
         );
         if let Some(f) = st.file.as_mut() {
             let _ = f.write_all(line.as_bytes());
