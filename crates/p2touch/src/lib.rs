@@ -351,11 +351,8 @@ mod tests {
         let parsed = Layout::from_text(&original.to_text()).expect("parse");
         assert_eq!(parsed.buttons.len(), original.buttons.len());
         assert_eq!(parsed.stick.visible, original.stick.visible);
-        // Compara con el valor por defecto real (no con un número fijo) para que el test no se rompa
-        // cada vez que se retoca el diseño.
-        let want = original.button(Action::Fire).unwrap().x;
         let fire = parsed.button(Action::Fire).unwrap();
-        assert!((fire.x - want).abs() < 1e-3);
+        assert!((fire.x - 0.88).abs() < 1e-3);
     }
 
     #[test]
