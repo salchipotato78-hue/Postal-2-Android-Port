@@ -48,6 +48,7 @@ pub(crate) fn perf_system(
     mut st: ResMut<PerfState>,
     mut texts: Query<&mut Text, With<FpsText>>,
     overlay: Query<&Visibility, With<crate::touchctl::OverlayPart>>,
+    meshes: Query<&Visibility, bevy::ecs::query::Or<(bevy::prelude::With<Mesh3d>, bevy::prelude::With<Mesh2d>)>>,
 ) {
     if !cfg!(target_os = "android") {
         return;
@@ -87,8 +88,11 @@ pub(crate) fn perf_system(
         // Nodos del overlay táctil: visibles/total (para saber si se dibujan).
         let total = overlay.iter().count();
         let visible = overlay.iter().filter(|v| matches!(v, Visibility::Visible)).count();
+        // Mallas 3D/2D visibles y totales: aproximan los draw calls del frame.
+        let mesh_total = meshes.iter().count();
+        let mesh_vis = meshes.iter().filter(|v| !matches!(v, Visibility::Hidden)).count();
         let line = format!(
-            "{} fps={fps:.1} media_ms={avg:.2} peor_ms={worst:.1} frames={} overlay={visible}/{total}\n",
+            "{} fps={fps:.1} media_ms={avg:.2} peor_ms={worst:.1} frames={} overlay={visible}/{total} mallas={mesh_vis}/{mesh_total}\n",
             unix_secs(),
             st.frames
         );
@@ -129,4 +133,15 @@ pub(crate) fn report(line: &str) {
     println!("{line}");
     #[cfg(target_os = "android")]
     append_log(&format!("{} {line}\n", unix_secs()));
+}
+
+/// Ajustes de render para Android: antialiasing (MSAA) apagado en las cámaras 3D. Bevy lo activa
+/// por defecto en 4x; en la GPU del teléfono es de lo que más ancho de banda consume.
+pub(crate) fn render_tune(mut commands: Commands, cams: Query<Entity, Added<Camera3d>>) {
+    if !cfg!(target_os = "android") {
+        return;
+    }
+    for e in &cams {
+        commands.entity(e).insert(Msaa::Off);
+    }
 }

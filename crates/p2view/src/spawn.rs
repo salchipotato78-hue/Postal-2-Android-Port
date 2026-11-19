@@ -33,7 +33,8 @@ pub fn make_image(t: &scene::TexData) -> Image {
         ..default()
     };
     // 16x like the original's D3D renderer (Postal2.ini LevelOfAnisotropy=16).
-    sampler.set_anisotropic_filter(16);
+    // En Android 4x: el filtrado anisotrópico 16x cuesta lecturas de textura en la GPU móvil.
+    sampler.set_anisotropic_filter(if cfg!(target_os = "android") { 4 } else { 16 });
     img.sampler = ImageSampler::Descriptor(sampler);
     img
 }

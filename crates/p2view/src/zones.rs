@@ -93,9 +93,11 @@ impl ZoneGraph {
 }
 
 /// Hides static actors whose zone the camera's zone cannot see. `P2VIEW_NO_ZONE_CULL` disables it.
+static NO_ZONE_CULL: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| std::env::var_os("P2VIEW_NO_ZONE_CULL").is_some());
+
 pub fn zone_cull(mut graph: Option<ResMut<ZoneGraph>>, cams: Query<(&GlobalTransform, &Camera), With<Camera3d>>, mut q: Query<(&ZoneTag, &mut Visibility, Has<ActorHidden>)>, mut unhidden: RemovedComponents<ActorHidden>) {
     let Some(g) = graph.as_mut() else { return };
-    if std::env::var_os("P2VIEW_NO_ZONE_CULL").is_some() {
+    if *NO_ZONE_CULL {
         return;
     }
     // An actor script showed again needs its zone visibility re-applied.
