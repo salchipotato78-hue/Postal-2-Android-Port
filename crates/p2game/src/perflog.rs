@@ -38,7 +38,7 @@ fn open_log(st: &mut PerfState) {
     let _ = st;
 }
 
-fn unix_secs() -> u64 {
+pub(crate) fn unix_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
@@ -123,7 +123,7 @@ pub(crate) fn install_panic_hook() {
 }
 
 #[cfg(target_os = "android")]
-fn append_log(text: &str) {
+pub(crate) fn append_log(text: &str) {
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(LOG_PATH) {
         let _ = f.write_all(text.as_bytes());
     }

@@ -65,6 +65,30 @@ pub(crate) fn install(app: &mut App, sim: &mut Sim, game_root: &std::path::Path)
     app.add_plugins(CanvasPlugin { lib, clear: None }).insert_non_send(UiState { front, smoke, shots: Vec::new() });
 }
 
+/// Diagnóstico (no cambia el juego): en menú, cada 120 frames activa el perfilador del VM y, al
+/// cerrar la ventana, escribe en game_log.txt los eventos y natives de script más caros.
+#[cfg(target_os = "android")]
+fn script_menu_diag(vm: &mut uscript::vm::Vm, frames: u32) {
+    let f = frames % 120;
+    if f == 0 {
+        vm.profile = true;
+        vm.profile_events.clear();
+        vm.profile_natives.clear();
+    } else if f == 119 {
+        vm.profile = false;
+        let top = |m: &std::collections::HashMap<String, (u64, f64)>| {
+            let mut v: Vec<_> = m.iter().map(|(k, &(n, t))| (k.clone(), n, t)).collect();
+            v.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            v.into_iter().take(6).map(|(k, n, t)| format!("  {k} calls {n} total {:.2} ms", t * 1000.0)).collect::<Vec<_>>().join("\n")
+        };
+        let msg = format!("{} script-menu eventos:\n{}\nnatives:\n{}\n", crate::perflog::unix_secs(), top(&vm.profile_events), top(&vm.profile_natives));
+        crate::perflog::append_log(&msg);
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn script_menu_diag(_vm: &mut uscript::vm::Vm, _frames: u32) {}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn ui_frame(
     mut sim: NonSendMut<Sim>,
@@ -117,6 +141,9 @@ pub(crate) fn ui_frame(
     let out = ui.front.frame(&mut sim.game, FrameInput { events: &events, typed: &typed, mouse: mouse_pos, width: w, height: h, dt });
     capture.captured = out.captured;
     capture.game_look = out.game_look;
+    if out.menu_up {
+        script_menu_diag(&mut sim.game.world.vm, ui.front.frames);
+    }
     capture.player_view = out.player_view;
     if let Some(p) = out.mouse_warp {
         win.set_cursor_position(Some(Vec2::new(p.0, p.1)));
